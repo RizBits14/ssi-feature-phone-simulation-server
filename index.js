@@ -43,3 +43,11 @@ async function initDb() {
     await db.command({ ping: 1 });
     console.log("MongoDB connected");
 }
+
+app.get("/", (req, res) => {
+    res.send("SSI Feature Phone Simulation API running");
+});
+
+app.get("/api/health", (req, res) => {
+    res.json({ ok: true, time: new Date().toISOString() });
+});
