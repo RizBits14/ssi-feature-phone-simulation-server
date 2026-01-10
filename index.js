@@ -51,3 +51,60 @@ app.get("/", (req, res) => {
 app.get("/api/health", (req, res) => {
     res.json({ ok: true, time: new Date().toISOString() });
 });
+
+app.post("/api/issuer/create-invitation", async (req, res) => {
+    try {
+        const label = (req.body?.label || "holder").toString();
+        const alias = (req.body?.alias || "holder").toString();
+
+        const invitationId = randId();
+        const invitationUrl = `sim://oob/${invitationId}?label=${encodeURIComponent(label)}&alias=${encodeURIComponent(alias)}`;
+
+        const doc = {
+            invitationId,
+            invitationUrl,
+            label,
+            alias,
+            status: "invitation-created",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        };
+
+        await connectionsCol.insertOne(doc);
+        res.json({ invitationId, invitationUrl });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post("/api/holder/receive-invitation", async (req, res) => {
+    try {
+        const invitationUrl = (req.body?.invitationUrl || "").toString().trim();
+        if (!invitationUrl) return res.status(400).json({ error: "invitationUrl is required" });
+
+        const match = invitationUrl.match(/^sim:\/\/oob\/([^?]+)/);
+        if (!match) return res.status(400).json({ error: "Invalid invitationUrl (expected sim://oob/<id>)" });
+
+        const invitationId = match[1];
+
+        const existing = await connectionsCol.findOne({ invitationId });
+        if (!existing) return res.status(404).json({ error: "Invitation not found" });
+
+        const connectionId = existing.connectionId || randId();
+
+        await connectionsCol.updateOne(
+            { invitationId },
+            {
+                $set: {
+                    connectionId,
+                    status: "connected",
+                    updatedAt: new Date(),
+                },
+            }
+        );
+
+        res.json({ ok: true, connectionId });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
