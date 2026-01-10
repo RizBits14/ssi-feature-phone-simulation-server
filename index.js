@@ -146,3 +146,75 @@ app.post("/api/holder/accept-credential", async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
+
+app.post("/api/verifier/send-proof-request", async (req, res) => {
+    try {
+        const connectionId = (req.body?.connectionId || "").toString().trim();
+        const request = req.body?.request || { ask: ["name", "department"], predicates: [{ field: "age", op: ">=", value: 20 }] };
+
+        if (!connectionId) return res.status(400).json({ error: "connectionId is required" });
+
+        const doc = {
+            connectionId,
+            request,
+            status: "requested",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        };
+
+        const r = await proofReqCol.insertOne(doc);
+        res.json({ ok: true, proofRequestId: r.insertedId });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post("/api/holder/present-proof", async (req, res) => {
+    try {
+        const proofRequestId = (req.body?.proofRequestId || "").toString().trim();
+        const credentialId = (req.body?.credentialId || "").toString().trim();
+
+        if (!proofRequestId) return res.status(400).json({ error: "proofRequestId is required" });
+        if (!credentialId) return res.status(400).json({ error: "credentialId is required" });
+
+        const cred = await credentialsCol.findOne({ _id: new ObjectId(credentialId) });
+        if (!cred) return res.status(404).json({ error: "Credential not found" });
+
+        const pres = {
+            proofRequestId,
+            credentialId,
+            revealed: cred.claims || {},
+            status: "presented",
+            createdAt: new Date(),
+        };
+
+        await presentationsCol.insertOne(pres);
+        await proofReqCol.updateOne(
+            { _id: new ObjectId(proofRequestId) },
+            { $set: { status: "presented", updatedAt: new Date() } }
+        );
+
+        res.json({ ok: true, verified: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get("/api/connections", async (req, res) => {
+    const items = await connectionsCol.find({}).sort({ createdAt: -1 }).limit(50).toArray();
+    res.json({ items });
+});
+
+app.get("/api/credentials", async (req, res) => {
+    const items = await credentialsCol.find({}).sort({ createdAt: -1 }).limit(50).toArray();
+    res.json({ items });
+});
+
+initDb()
+    .then(() => {
+        app.listen(port, () => console.log(`API listening on port ${port}`));
+    })
+    .catch((e) => {
+        console.error("DB init failed:", e);
+        process.exit(1);
+    });
