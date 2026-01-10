@@ -1,13 +1,19 @@
-const express = require('express')
-const cors = require('cors')
-const app = express()
-require('dotenv').config()
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const express = require("express");
+const cors = require("cors");
+require("dotenv").config();
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
-const port = process.env.PORT || 3000
+const app = express();
+const port = process.env.PORT || 3000;
 
-app.use(express.json())
-app.use(cors())
+app.use(express.json({ limit: "2mb" }));
+
+app.use(
+    cors({
+        origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",") : "*",
+        credentials: false,
+    })
+);
 
 const uri = `mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@riz14.17psksb.mongodb.net/?appName=Riz14`;
 
@@ -16,24 +22,24 @@ const client = new MongoClient(uri, {
         version: ServerApiVersion.v1,
         strict: true,
         deprecationErrors: true,
-    }
+    },
 });
 
-async function run() {
-    try {
-        await client.connect();
-        await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
-    } finally {
-        // await client.close();
-    }
+let db, connectionsCol, credentialsCol, proofReqCol, presentationsCol;
+
+function randId() {
+    return Math.random().toString(16).slice(2) + Date.now().toString(16);
 }
-run().catch(console.dir);
 
-app.get('/', (req, res) => {
-    res.send('SSI-Feature-Phone-Simulation is running')
-})
+async function initDb() {
+    await client.connect();
+    db = client.db(process.env.DB_NAME || "ssi_feature_phone_sim");
 
-app.listen(port, () => {
-    console.log(`App is listening on port ${port}`)
-})
+    connectionsCol = db.collection("connections");
+    credentialsCol = db.collection("credentials");
+    proofReqCol = db.collection("proof_requests");
+    presentationsCol = db.collection("proof_presentations");
+
+    await db.command({ ping: 1 });
+    console.log("MongoDB connected");
+}
