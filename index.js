@@ -210,6 +210,24 @@ app.get("/api/credentials", async (req, res) => {
     res.json({ items });
 });
 
+app.get("/api/proof-requests", async (req, res) => {
+    try {
+        const items = await proofReqCol.find({}).sort({ createdAt: -1 }).limit(50).toArray();
+        res.json({ items });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get("/api/presentations", async (req, res) => {
+    try {
+        const items = await presentationsCol.find({}).sort({ createdAt: -1 }).limit(50).toArray();
+        res.json({ items });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 initDb()
     .then(() => {
         app.listen(port, () => console.log(`API listening on port ${port}`));
