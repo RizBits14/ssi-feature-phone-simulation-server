@@ -108,3 +108,41 @@ app.post("/api/holder/receive-invitation", async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
+
+app.post("/api/issuer/issue-credential", async (req, res) => {
+    try {
+        const connectionId = (req.body?.connectionId || "").toString().trim();
+        const claims = req.body?.claims || {};
+        if (!connectionId) return res.status(400).json({ error: "connectionId is required" });
+
+        const cred = {
+            connectionId,
+            type: "StudentID",
+            status: "offered",
+            claims,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        };
+
+        const r = await credentialsCol.insertOne(cred);
+        res.json({ ok: true, credentialId: r.insertedId });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post("/api/holder/accept-credential", async (req, res) => {
+    try {
+        const credentialId = (req.body?.credentialId || "").toString().trim();
+        if (!credentialId) return res.status(400).json({ error: "credentialId is required" });
+
+        await credentialsCol.updateOne(
+            { _id: new ObjectId(credentialId) },
+            { $set: { status: "accepted", updatedAt: new Date() } }
+        );
+
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
