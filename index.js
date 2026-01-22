@@ -10,7 +10,7 @@ app.use(express.json({ limit: "2mb" }));
 
 app.use(
     cors({
-        origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",") : "*",
+        origin: "*",
         credentials: false,
     })
 );
@@ -31,8 +31,15 @@ function randId() {
     return Math.random().toString(16).slice(2) + Date.now().toString(16);
 }
 
+function generateInviteCode(length = 5) {
+    const min = Math.pow(10, length - 1);
+    const max = Math.pow(10, length) - 1;
+    return Math.floor(min + Math.random() * (max - min + 1)).toString();
+}
+
+
 async function initDb() {
-    await client.connect();
+    // await client.connect();
     db = client.db(process.env.DB_NAME || "ssi_feature_phone_sim");
 
     connectionsCol = db.collection("connections");
@@ -40,7 +47,7 @@ async function initDb() {
     proofReqCol = db.collection("proof_requests");
     presentationsCol = db.collection("proof_presentations");
 
-    await db.command({ ping: 1 });
+    // await db.command({ ping: 1 });
     console.log("MongoDB connected");
 }
 
@@ -58,11 +65,11 @@ app.post("/api/issuer/create-invitation", async (req, res) => {
         const alias = (req.body?.alias || "holder").toString();
 
         const invitationId = randId();
-        const invitationUrl = `sim://oob/${invitationId}?label=${encodeURIComponent(label)}&alias=${encodeURIComponent(alias)}`;
+        const inviteCode = generateInviteCode(5); // <-- NUMBER
 
         const doc = {
             invitationId,
-            invitationUrl,
+            inviteCode,
             label,
             alias,
             status: "invitation-created",
@@ -71,29 +78,31 @@ app.post("/api/issuer/create-invitation", async (req, res) => {
         };
 
         await connectionsCol.insertOne(doc);
-        res.json({ invitationId, invitationUrl });
+
+        // Only send the number
+        res.json({ inviteCode });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
+
 app.post("/api/holder/receive-invitation", async (req, res) => {
     try {
-        const invitationUrl = (req.body?.invitationUrl || "").toString().trim();
-        if (!invitationUrl) return res.status(400).json({ error: "invitationUrl is required" });
+        const inviteCode = (req.body?.inviteCode || "").toString().trim();
+        if (!inviteCode) {
+            return res.status(400).json({ error: "inviteCode is required" });
+        }
 
-        const match = invitationUrl.match(/^sim:\/\/oob\/([^?]+)/);
-        if (!match) return res.status(400).json({ error: "Invalid invitationUrl (expected sim://oob/<id>)" });
-
-        const invitationId = match[1];
-
-        const existing = await connectionsCol.findOne({ invitationId });
-        if (!existing) return res.status(404).json({ error: "Invitation not found" });
+        const existing = await connectionsCol.findOne({ inviteCode });
+        if (!existing) {
+            return res.status(404).json({ error: "Invalid invite code" });
+        }
 
         const connectionId = existing.connectionId || randId();
 
         await connectionsCol.updateOne(
-            { invitationId },
+            { inviteCode },
             {
                 $set: {
                     connectionId,
@@ -108,6 +117,7 @@ app.post("/api/holder/receive-invitation", async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
+
 
 app.post("/api/issuer/issue-credential", async (req, res) => {
     try {
