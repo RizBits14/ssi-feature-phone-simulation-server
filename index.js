@@ -65,7 +65,7 @@ app.post("/api/issuer/create-invitation", async (req, res) => {
         const alias = (req.body?.alias || "holder").toString();
 
         const invitationId = randId();
-        const inviteCode = generateInviteCode(5); // <-- NUMBER
+        const inviteCode = generateInviteCode(5);
 
         const doc = {
             invitationId,
@@ -79,7 +79,6 @@ app.post("/api/issuer/create-invitation", async (req, res) => {
 
         await connectionsCol.insertOne(doc);
 
-        // Only send the number
         res.json({ inviteCode });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -123,11 +122,17 @@ app.post("/api/issuer/issue-credential", async (req, res) => {
     try {
         const connectionId = (req.body?.connectionId || "").toString().trim();
         const claims = req.body?.claims || {};
-        if (!connectionId) return res.status(400).json({ error: "connectionId is required" });
+
+        if (!connectionId) {
+            return res.status(400).json({ error: "connectionId is required" });
+        }
+
+        const credentialType =
+            (claims.department || "").toString().trim() || "UnknownCredential";
 
         const cred = {
             connectionId,
-            type: "StudentID",
+            type: credentialType,
             status: "offered",
             claims,
             createdAt: new Date(),
