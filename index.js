@@ -162,6 +162,40 @@ app.post("/api/holder/accept-credential", async (req, res) => {
     }
 });
 
+app.post("/api/holder/reject-credential", async (req, res) => {
+    try {
+        const credentialId = (req.body?.credentialId || "").toString().trim();
+        if (!credentialId) return res.status(400).json({ error: "credentialId is required" });
+        if (!ObjectId.isValid(credentialId)) return res.status(400).json({ error: "Invalid credentialId" });
+
+        await credentialsCol.updateOne(
+            { _id: new ObjectId(credentialId) },
+            { $set: { status: "rejected", updatedAt: new Date() } }
+        );
+
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post("/api/holder/decline-proof-request", async (req, res) => {
+    try {
+        const proofRequestId = (req.body?.proofRequestId || "").toString().trim();
+        if (!proofRequestId) return res.status(400).json({ error: "proofRequestId is required" });
+        if (!ObjectId.isValid(proofRequestId)) return res.status(400).json({ error: "Invalid proofRequestId" });
+
+        await proofReqCol.updateOne(
+            { _id: new ObjectId(proofRequestId) },
+            { $set: { status: "declined", updatedAt: new Date() } }
+        );
+
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.post("/api/verifier/send-proof-request", async (req, res) => {
     try {
         const connectionId = (req.body?.connectionId || "").toString().trim();
